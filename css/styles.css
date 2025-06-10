@@ -213,11 +213,12 @@ body {
     background: 
         radial-gradient(circle at 25% 25%, rgba(13, 110, 253, 0.1) 0%, transparent 50%),
         radial-gradient(circle at 75% 75%, rgba(124, 58, 237, 0.1) 0%, transparent 50%);
+        overflow: hidden;
 }
 
 .preview-container {
-    width: 400px;
-    height: 300px;
+    width: 90%;
+    height: 90%;
     border: 2px dashed var(--border-color);
     border-radius: 12px;
     display: flex;
