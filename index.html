@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS Visual Editor Pro</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold" href="#">
+                <i class="fas fa-code me-2"></i>
+                CSS Visual Editor Pro
+            </a>
+            <div class="navbar-nav ms-auto">
+                <button class="btn btn-outline-light me-2" id="darkModeToggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+                <button class="btn btn-success" id="showCodeBtn">
+                    <i class="fas fa-code me-1"></i>
+                    Show Code
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container-fluid p-0 main-content">
+        <div class="row g-0 h-100">
+            <!-- Left Sidebar -->
+            <div class="col-md-2 sidebar">
+                <div class="sidebar-header">
+                    <h5 class="text-center py-3 mb-0">
+                        <i class="fas fa-layer-group me-2"></i>
+                        Categories
+                    </h5>
+                </div>
+                <ul class="category-list list-unstyled">
+                    <li class="category-item active" data-category="flexbox">
+                        <i class="fab fa-css3-alt me-2"></i>
+                        Flexbox
+                    </li>
+                    <li class="category-item" data-category="grid">
+                        <i class="fas fa-th me-2"></i>
+                        Grid
+                    </li>
+                    <li class="category-item" data-category="boxshadow">
+                        <i class="fas fa-square me-2"></i>
+                        Box Shadow
+                    </li>
+                    <li class="category-item" data-category="transform">
+                        <i class="fas fa-sync-alt me-2"></i>
+                        Transform
+                    </li>
+                    <li class="category-item" data-category="border">
+                        <i class="far fa-square me-2"></i>
+                        Border
+                    </li>
+                    <li class="category-item" data-category="typography">
+                        <i class="fas fa-font me-2"></i>
+                        Typography
+                    </li>
+                    <li class="category-item" data-category="background">
+                        <i class="fas fa-palette me-2"></i>
+                        Background
+                    </li>
+                    <li class="category-item" data-category="layout">
+                        <i class="fas fa-columns me-2"></i>
+                        Layout
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Center Controls -->
+            <div class="col-md-4 controls-section">
+                <div class="controls-header">
+                    <h5 class="py-3 mb-0 text-center">
+                        <i class="fas fa-sliders-h me-2"></i>
+                        <span id="currentCategory">Flexbox</span> Properties
+                    </h5>
+                </div>
+                <div class="controls-content p-3">
+                    <div id="propertyControls">
+                        <!-- Dynamic content will be loaded here -->
+                    </div>
+                    <button class="btn btn-outline-secondary w-100 mt-3" id="resetBtn">
+                        <i class="fas fa-undo me-1"></i>
+                        Reset to Default
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Preview -->
+            <div class="col-md-6 preview-section">
+                <div class="preview-header">
+                    <h5 class="py-3 mb-0 text-center">
+                        <i class="fas fa-eye me-2"></i>
+                        Live Preview
+                    </h5>
+                </div>
+                <div class="preview-content">
+                    <div class="preview-container" id="previewContainer">
+                        <!-- Dynamic preview content -->
+                        <div class="preview-item"></div>
+                        <div class="preview-item"></div>
+                        <div class="preview-item"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Code Export Modal -->
+    <div class="modal fade" id="codeModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-code me-2"></i>
+                        Generated Code
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <ul class="nav nav-tabs" id="codeTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="html-tab" data-bs-toggle="tab" data-bs-target="#html" type="button">
+                                <i class="fab fa-html5 me-1"></i>HTML
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="css-tab" data-bs-toggle="tab" data-bs-target="#css" type="button">
+                                <i class="fab fa-css3-alt me-1"></i>CSS
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="bootstrap-tab" data-bs-toggle="tab" data-bs-target="#bootstrap" type="button">
+                                <i class="fab fa-bootstrap me-1"></i>Bootstrap
+                            </button>
+                        </li>
+                    </ul>
+                    <div class="tab-content" id="codeTabContent">
+                        <div class="tab-pane fade show active" id="html" role="tabpanel">
+                            <div class="code-actions mb-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('htmlCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy HTML
+                                </button>
+                            </div>
+                            <pre><code id="htmlCode" class="language-html"></code></pre>
+                        </div>
+                        <div class="tab-pane fade" id="css" role="tabpanel">
+                            <div class="code-actions mb-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('cssCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy CSS
+                                </button>
+                            </div>
+                            <pre><code id="cssCode" class="language-css"></code></pre>
+                        </div>
+                        <div class="tab-pane fade" id="bootstrap" role="tabpanel">
+                            <div class="code-actions mb-2">
+                                <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('bootstrapCode')">
+                                    <i class="fas fa-copy me-1"></i>Copy Bootstrap
+                                </button>
+                            </div>
+                            <pre><code id="bootstrapCode" class="language-html"></code></pre>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-success" id="downloadCodeBtn">
+                        <i class="fas fa-download me-1"></i>
+                        Download All
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast for notifications -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+        <div id="liveToast" class="toast hide" role="alert">
+            <div class="toast-header">
+                <i class="fas fa-check-circle text-success me-2"></i>
+                <strong class="me-auto">Success</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage">
+                Code copied to clipboard!
+            </div>
+        </div>
+    </div>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    
+    <!-- Bootstrap 5 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Prism.js for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <!-- Custom JS -->
+    <script src="js/script.js"></script>
+</body>
+</html>
