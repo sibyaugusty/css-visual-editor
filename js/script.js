@@ -1,9 +1,12 @@
 /**
- * CSS Visual Editor Pro - JavaScript
+ * CSS Visual Editor Pro - Responsive JavaScript
  * Advanced CSS property manipulation with live preview and code generation
  */
 
 $(document).ready(function() {
+    // Load saved state first
+    loadFromLocalStorage();
+    
     // Initialize the application
     initializeApp();
 });
@@ -11,18 +14,19 @@ $(document).ready(function() {
 // Global state management
 const AppState = {
     currentCategory: 'flexbox',
+    activeSection: 'categories', // For mobile navigation
     properties: {
         flexbox: {
             'justify-content': 'flex-start',
             'align-items': 'stretch',
             'flex-direction': 'row',
             'flex-wrap': 'nowrap',
-            'gap': '20px'
+            'gap': '20'
         },
         grid: {
             'grid-template-columns': 'repeat(3, 1fr)',
             'grid-template-rows': 'auto',
-            'gap': '20px',
+            'gap': '20',
             'justify-items': 'stretch',
             'align-items': 'stretch'
         },
@@ -70,7 +74,11 @@ const AppState = {
             'height': 'auto'
         }
     },
-    darkMode: localStorage.getItem('darkMode') === 'true'
+    darkMode: localStorage.getItem('darkMode') === 'true',
+    isMobile: window.innerWidth < 992,
+    touchStartX: 0,
+    touchStartY: 0,
+    isInitialized: false
 };
 
 // Property definitions for dynamic control generation
@@ -439,72 +447,380 @@ const PropertyDefinitions = {
  * Initialize the application
  */
 function initializeApp() {
-    // Set initial dark mode
+    try {
+        // Prevent double initialization
+        if (AppState.isInitialized) {
+            return;
+        }
+        
+        // Check if mobile
+        checkMobileState();
+        
+        // Set initial dark mode
+        applyDarkModeSettings();
+        
+        // Bind event handlers
+        bindEventHandlers();
+        
+        // Load initial category
+        loadCategoryControls('flexbox');
+        
+        // Initialize tooltips
+        initializeTooltips();
+        
+        // Set initial mobile section
+        if (AppState.isMobile) {
+            showMobileSection('categories');
+        }
+        
+        // Show welcome animation
+        showWelcomeAnimation();
+        
+        // Mark as initialized
+        AppState.isInitialized = true;
+        
+        console.log('CSS Visual Editor Pro initialized successfully');
+    } catch (error) {
+        console.error('Failed to initialize application:', error);
+        showToast('Failed to initialize application. Please refresh the page.');
+    }
+}
+
+/**
+ * Apply dark mode settings
+ */
+function applyDarkModeSettings() {
     if (AppState.darkMode) {
         document.documentElement.setAttribute('data-theme', 'dark');
         $('#darkModeToggle i').removeClass('fa-moon').addClass('fa-sun');
+    } else {
+        document.documentElement.removeAttribute('data-theme');
+        $('#darkModeToggle i').removeClass('fa-sun').addClass('fa-moon');
+    }
+}
+
+/**
+ * Check mobile state and update accordingly
+ */
+function checkMobileState() {
+    const wasMobile = AppState.isMobile;
+    AppState.isMobile = window.innerWidth < 992;
+    
+    if (AppState.isMobile) {
+        $('body').addClass('mobile-view');
+        $('.mobile-tabs').show();
+    } else {
+        $('body').removeClass('mobile-view');
+        $('.mobile-tabs').hide();
+        // Show all sections on desktop
+        $('.sidebar-wrapper, .controls-wrapper, .preview-wrapper').removeClass('active').show();
     }
     
-    // Bind event handlers
-    bindEventHandlers();
-    
-    // Load initial category
-    loadCategoryControls('flexbox');
-    
-    // Initialize tooltips
-    initializeTooltips();
-    
-    // Show welcome animation
-    showWelcomeAnimation();
-    
-    console.log('CSS Visual Editor Pro initialized successfully');
+    return wasMobile !== AppState.isMobile;
 }
 
 /**
  * Bind all event handlers
  */
 function bindEventHandlers() {
+    // Unbind existing handlers to prevent duplicates
+    $(window).off('resize.cssEditor');
+    $(document).off('keydown.cssEditor');
+    
+    // Window resize handler
+    $(window).on('resize.cssEditor', debounce(handleWindowResize, 250));
+    
+    // Mobile tab navigation
+    $('.mobile-tab-btn').off('click.cssEditor').on('click.cssEditor', handleMobileTabClick);
+    
+    // Mobile menu toggle
+    $('#mobileMenuToggle').off('click.cssEditor').on('click.cssEditor', toggleMobileMenu);
+    
+    // Mobile overlay
+    $('#mobileOverlay').off('click.cssEditor').on('click.cssEditor', closeMobileMenu);
+    
     // Category selection
-    $('.category-item').on('click', handleCategorySelection);
+    $('.category-item').off('click.cssEditor').on('click.cssEditor', handleCategorySelection);
     
     // Dark mode toggle
-    $('#darkModeToggle').on('click', toggleDarkMode);
+    $('#darkModeToggle').off('click.cssEditor').on('click.cssEditor', toggleDarkMode);
     
     // Show code modal
-    $('#showCodeBtn').on('click', showCodeModal);
+    $('#showCodeBtn').off('click.cssEditor').on('click.cssEditor', showCodeModal);
     
     // Reset button
-    $('#resetBtn').on('click', resetCurrentCategory);
+    $('#resetBtn').off('click.cssEditor').on('click.cssEditor', resetCurrentCategory);
     
     // Download code
-    $('#downloadCodeBtn').on('click', downloadCode);
+    $('#downloadCodeBtn').off('click.cssEditor').on('click.cssEditor', downloadCode);
     
-    // Dynamic property change handler will be bound when controls are created
+    // Keyboard navigation
+    $(document).on('keydown.cssEditor', handleKeyboardNavigation);
+    
+    // Touch events for better mobile experience
+    if ('ontouchstart' in window) {
+        bindTouchEvents();
+    }
+    
+    // Modal events
+    $('#codeModal').off('shown.bs.modal.cssEditor').on('shown.bs.modal.cssEditor', function() {
+        // Trigger syntax highlighting when modal is shown
+        if (window.Prism) {
+            setTimeout(() => Prism.highlightAll(), 100);
+        }
+    });
+}
+
+/**
+ * Handle window resize
+ */
+function handleWindowResize() {
+    try {
+        const layoutChanged = checkMobileState();
+        
+        // If switched from mobile to desktop or vice versa
+        if (layoutChanged) {
+            if (AppState.isMobile) {
+                showMobileSection(AppState.activeSection);
+            } else {
+                $('.sidebar-wrapper, .controls-wrapper, .preview-wrapper').removeClass('active').show();
+            }
+            
+            // Reinitialize tooltips
+            initializeTooltips();
+            
+            // Update preview
+            updatePreview();
+        }
+    } catch (error) {
+        console.error('Error handling window resize:', error);
+    }
+}
+
+/**
+ * Handle mobile tab clicks
+ */
+function handleMobileTabClick() {
+    try {
+        const tab = $(this).data('tab');
+        
+        // Update active tab
+        $('.mobile-tab-btn').removeClass('active');
+        $(this).addClass('active');
+        
+        // Show corresponding section
+        showMobileSection(tab);
+        
+        // Add haptic feedback on supported devices
+        if (navigator.vibrate) {
+            navigator.vibrate(10);
+        }
+    } catch (error) {
+        console.error('Error handling mobile tab click:', error);
+    }
+}
+
+/**
+ * Show mobile section
+ */
+function showMobileSection(section) {
+    try {
+        AppState.activeSection = section;
+        
+        // Hide all sections
+        $('.sidebar-wrapper, .controls-wrapper, .preview-wrapper').removeClass('active');
+        
+        // Show selected section
+        switch (section) {
+            case 'categories':
+                $('.sidebar-wrapper').addClass('active');
+                break;
+            case 'controls':
+                $('.controls-wrapper').addClass('active');
+                break;
+            case 'preview':
+                $('.preview-wrapper').addClass('active');
+                break;
+            default:
+                console.warn('Unknown section:', section);
+                return;
+        }
+        
+        // Update mobile tab
+        $('.mobile-tab-btn').removeClass('active');
+        $(`.mobile-tab-btn[data-tab="${section}"]`).addClass('active');
+    } catch (error) {
+        console.error('Error showing mobile section:', error);
+    }
+}
+
+/**
+ * Toggle mobile menu
+ */
+function toggleMobileMenu() {
+    try {
+        const $sidebar = $('.sidebar-wrapper');
+        const $overlay = $('#mobileOverlay');
+        
+        if ($sidebar.hasClass('mobile-menu-open')) {
+            closeMobileMenu();
+        } else {
+            $sidebar.addClass('mobile-menu-open');
+            $overlay.addClass('show');
+            $('body').addClass('mobile-menu-active');
+        }
+    } catch (error) {
+        console.error('Error toggling mobile menu:', error);
+    }
+}
+
+/**
+ * Close mobile menu
+ */
+function closeMobileMenu() {
+    $('.sidebar-wrapper').removeClass('mobile-menu-open');
+    $('#mobileOverlay').removeClass('show');
+    $('body').removeClass('mobile-menu-active');
+}
+
+/**
+ * Handle keyboard navigation
+ */
+function handleKeyboardNavigation(e) {
+    try {
+        // Escape key to close mobile menu and modals
+        if (e.key === 'Escape') {
+            closeMobileMenu();
+            if ($('#codeModal').hasClass('show')) {
+                $('#codeModal').modal('hide');
+            }
+            return;
+        }
+        
+        // Arrow keys for mobile tab navigation
+        if (AppState.isMobile && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            const tabs = ['categories', 'controls', 'preview'];
+            const currentIndex = tabs.indexOf(AppState.activeSection);
+            let newIndex;
+            
+            if (e.key === 'ArrowLeft') {
+                newIndex = currentIndex > 0 ? currentIndex - 1 : tabs.length - 1;
+            } else {
+                newIndex = currentIndex < tabs.length - 1 ? currentIndex + 1 : 0;
+            }
+            
+            showMobileSection(tabs[newIndex]);
+            e.preventDefault();
+        }
+        
+        // Number keys for quick category selection (1-8)
+        if (e.key >= '1' && e.key <= '8' && !e.ctrlKey && !e.altKey) {
+            const categories = ['flexbox', 'grid', 'boxshadow', 'transform', 'border', 'typography', 'background', 'layout'];
+            const index = parseInt(e.key) - 1;
+            if (categories[index]) {
+                const $categoryItem = $(`.category-item[data-category="${categories[index]}"]`);
+                if ($categoryItem.length) {
+                    $categoryItem.click();
+                    e.preventDefault();
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error handling keyboard navigation:', error);
+    }
+}
+
+/**
+ * Bind touch events for better mobile experience
+ */
+function bindTouchEvents() {
+    let startX = 0, startY = 0;
+    
+    // Swipe navigation for mobile
+    $('.main-content').off('touchstart.cssEditor touchend.cssEditor')
+        .on('touchstart.cssEditor', function(e) {
+            if (!AppState.isMobile) return;
+            
+            const touch = e.originalEvent.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            AppState.touchStartX = startX;
+            AppState.touchStartY = startY;
+        })
+        .on('touchend.cssEditor', function(e) {
+            if (!AppState.isMobile || !startX || !startY) return;
+            
+            const touch = e.originalEvent.changedTouches[0];
+            const deltaX = touch.clientX - startX;
+            const deltaY = touch.clientY - startY;
+            
+            // Only trigger if horizontal swipe is significant and not vertical scroll
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
+                const tabs = ['categories', 'controls', 'preview'];
+                const currentIndex = tabs.indexOf(AppState.activeSection);
+                
+                if (deltaX > 0 && currentIndex > 0) {
+                    // Swipe right - previous tab
+                    showMobileSection(tabs[currentIndex - 1]);
+                    e.preventDefault();
+                } else if (deltaX < 0 && currentIndex < tabs.length - 1) {
+                    // Swipe left - next tab
+                    showMobileSection(tabs[currentIndex + 1]);
+                    e.preventDefault();
+                }
+            }
+            
+            startX = startY = 0;
+        });
 }
 
 /**
  * Handle category selection
  */
 function handleCategorySelection() {
-    const category = $(this).data('category');
-    
-    // Update active state
-    $('.category-item').removeClass('active');
-    $(this).addClass('active');
-    
-    // Update current category
-    AppState.currentCategory = category;
-    $('#currentCategory').text($(this).text().trim());
-    
-    // Load category controls with animation
-    loadCategoryControls(category);
-    
-    // Update preview
-    updatePreview();
-    
-    // Add selection animation
-    $(this).addClass('animate-property');
-    setTimeout(() => $(this).removeClass('animate-property'), 600);
+    try {
+        const category = $(this).data('category');
+        
+        if (!category || !PropertyDefinitions[category]) {
+            console.error('Invalid category:', category);
+            return;
+        }
+        
+        // Update active state
+        $('.category-item').removeClass('active');
+        $(this).addClass('active');
+        
+        // Update current category
+        AppState.currentCategory = category;
+        const categoryName = $(this).find('span').text().trim();
+        $('#currentCategory').text(categoryName);
+        
+        // Load category controls with animation
+        loadCategoryControls(category);
+        
+        // Update preview
+        updatePreview();
+        
+        // Add selection animation
+        $(this).addClass('animate-property');
+        setTimeout(() => $(this).removeClass('animate-property'), 600);
+        
+        // On mobile, auto-switch to controls
+        if (AppState.isMobile) {
+            setTimeout(() => {
+                showMobileSection('controls');
+            }, 300);
+        }
+        
+        // Close mobile menu if open
+        closeMobileMenu();
+        
+        // Save current category
+        localStorage.setItem('currentCategory', category);
+    } catch (error) {
+        console.error('Error handling category selection:', error);
+        showToast('Error loading category');
+    }
 }
 
 /**
@@ -516,94 +832,117 @@ function loadCategoryControls(category) {
     
     if (!definitions) {
         console.error(`No definitions found for category: ${category}`);
+        $container.html('<div class="alert alert-warning">Category not found</div>');
         return;
     }
     
-    // Add loading state
-    $container.addClass('loading').empty();
-    
-    setTimeout(() => {
-        let html = '';
+    try {
+        // Add loading state
+        $container.addClass('loading').empty();
         
-        Object.keys(definitions).forEach(property => {
-            const def = definitions[property];
-            const currentValue = AppState.properties[category][property];
+        setTimeout(() => {
+            let html = '';
             
-            html += generatePropertyControl(property, def, currentValue);
-        });
-        
-        $container.html(html).removeClass('loading');
-        
-        // Bind property change handlers
-        bindPropertyHandlers();
-        
-        // Initialize color pickers
-        initializeColorPickers();
-        
-        // Add entrance animation
-        $('.property-group').each((index, element) => {
-            setTimeout(() => {
-                $(element).addClass('animate-property');
-                setTimeout(() => $(element).removeClass('animate-property'), 600);
-            }, index * 100);
-        });
-    }, 300);
+            Object.keys(definitions).forEach((property, index) => {
+                const def = definitions[property];
+                const currentValue = AppState.properties[category][property] || '';
+                
+                html += generatePropertyControl(property, def, currentValue, index);
+            });
+            
+            $container.html(html).removeClass('loading');
+            
+            // Bind property change handlers
+            bindPropertyHandlers();
+            
+            // Initialize color pickers
+            initializeColorPickers();
+            
+            // Add entrance animation
+            $('.property-group').each((index, element) => {
+                setTimeout(() => {
+                    $(element).addClass('animate-property');
+                    setTimeout(() => $(element).removeClass('animate-property'), 600);
+                }, index * 100);
+            });
+            
+            // Reinitialize tooltips
+            initializeTooltips();
+        }, 200);
+    } catch (error) {
+        console.error('Error loading category controls:', error);
+        $container.removeClass('loading').html('<div class="alert alert-danger">Error loading controls</div>');
+    }
 }
 
 /**
  * Generate HTML for a property control
  */
-function generatePropertyControl(property, definition, currentValue) {
-    const { type, label, icon, options, min, max, step, unit, tooltip } = definition;
-    
-    let html = `
-        <div class="property-group" data-property="${property}">
-            <div class="property-label">
-                <i class="${icon}"></i>
-                ${label}
-                <i class="fas fa-info-circle tooltip-icon ms-auto" 
-                   data-bs-toggle="tooltip" 
-                   data-bs-placement="top" 
-                   title="${tooltip}"></i>
-            </div>
-    `;
-    
-    switch (type) {
-        case 'radio':
-            html += generateRadioControl(property, options, currentValue);
-            break;
-        case 'range':
-            html += generateRangeControl(property, min, max, step, unit, currentValue);
-            break;
-        case 'select':
-            html += generateSelectControl(property, options, currentValue);
-            break;
-        case 'color':
-            html += generateColorControl(property, currentValue);
-            break;
+function generatePropertyControl(property, definition, currentValue, index) {
+    try {
+        const { type, label, icon, options, min, max, step, unit, tooltip } = definition;
+        
+        let html = `
+            <div class="property-group" data-property="${property}" style="animation-delay: ${index * 0.1}s">
+                <div class="property-label">
+                    <i class="${icon || 'fas fa-cog'}"></i>
+                    ${escapeHtml(label)}
+                    <i class="fas fa-info-circle tooltip-icon ms-auto" 
+                       data-bs-toggle="tooltip" 
+                       data-bs-placement="top" 
+                       title="${escapeHtml(tooltip || '')}"></i>
+                </div>
+        `;
+        
+        switch (type) {
+            case 'radio':
+                html += generateRadioControl(property, options, currentValue);
+                break;
+            case 'range':
+                html += generateRangeControl(property, min, max, step, unit, currentValue);
+                break;
+            case 'select':
+                html += generateSelectControl(property, options, currentValue);
+                break;
+            case 'color':
+                html += generateColorControl(property, currentValue);
+                break;
+            default:
+                console.warn('Unknown control type:', type);
+                html += '<div class="alert alert-warning">Unknown control type</div>';
+        }
+        
+        html += '</div>';
+        return html;
+    } catch (error) {
+        console.error('Error generating property control:', error);
+        return '<div class="alert alert-danger">Error generating control</div>';
     }
-    
-    html += '</div>';
-    return html;
 }
 
 /**
  * Generate radio button control
  */
 function generateRadioControl(property, options, currentValue) {
+    if (!Array.isArray(options)) {
+        console.error('Radio options must be an array');
+        return '<div class="alert alert-warning">Invalid radio options</div>';
+    }
+    
     let html = '<div class="property-options">';
     
-    options.forEach(option => {
+    options.forEach((option, index) => {
         const checked = option === currentValue ? 'checked' : '';
-        const id = `${property}-${option}`;
+        const id = `${property}-${option}-${Date.now()}-${index}`;
+        const safeOption = escapeHtml(option);
         
         html += `
             <div class="form-check form-check-inline">
                 <input class="form-check-input property-input" 
                        type="radio" 
-                       name="${property}" 
+                       name="${escapeHtml(property)}" 
                        id="${id}" 
-                       value="${option}" 
+                       value="${safeOption}" 
                        ${checked}>
                 <label class="form-check-label" for="${id}">
                     ${formatOptionLabel(option)}
@@ -622,23 +961,27 @@ function generateRadioControl(property, options, currentValue) {
 function generateRangeControl(property, min, max, step, unit, currentValue) {
     const stepAttr = step ? `step="${step}"` : '';
     const unitDisplay = unit || '';
+    const safeProperty = escapeHtml(property);
+    const safeMin = escapeHtml(String(min || 0));
+    const safeMax = escapeHtml(String(max || 100));
+    const safeValue = escapeHtml(String(currentValue || 0));
     
     return `
         <div class="range-control">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <small class="text-muted">${min}${unitDisplay}</small>
-                <span class="badge bg-primary" id="${property}-value">
-                    ${currentValue}${unitDisplay}
+                <small class="text-muted">${safeMin}${unitDisplay}</small>
+                <span class="badge bg-primary" id="${safeProperty}-value">
+                    ${safeValue}${unitDisplay}
                 </span>
-                <small class="text-muted">${max}${unitDisplay}</small>
+                <small class="text-muted">${safeMax}${unitDisplay}</small>
             </div>
             <input type="range" 
                    class="form-range property-input" 
-                   name="${property}"
-                   min="${min}" 
-                   max="${max}" 
+                   name="${safeProperty}"
+                   min="${safeMin}" 
+                   max="${safeMax}" 
                    ${stepAttr}
-                   value="${currentValue}">
+                   value="${safeValue}">
         </div>
     `;
 }
@@ -647,13 +990,21 @@ function generateRangeControl(property, min, max, step, unit, currentValue) {
  * Generate select dropdown control
  */
 function generateSelectControl(property, options, currentValue) {
-    let html = `<select class="form-select property-input" name="${property}">`;
+    if (typeof options !== 'object' || options === null) {
+        console.error('Select options must be an object');
+        return '<div class="alert alert-warning">Invalid select options</div>';
+    }
+    
+    const safeProperty = escapeHtml(property);
+    let html = `<select class="form-select property-input" name="${safeProperty}">`;
     
     Object.keys(options).forEach(value => {
         const selected = value === currentValue ? 'selected' : '';
         const label = options[value];
+        const safeValue = escapeHtml(value);
+        const safeLabel = escapeHtml(label);
         
-        html += `<option value="${value}" ${selected}>${label}</option>`;
+        html += `<option value="${safeValue}" ${selected}>${safeLabel}</option>`;
     });
     
     html += '</select>';
@@ -664,20 +1015,23 @@ function generateSelectControl(property, options, currentValue) {
  * Generate color picker control
  */
 function generateColorControl(property, currentValue) {
+    const safeProperty = escapeHtml(property);
+    const safeValue = escapeHtml(currentValue || '#000000');
+    
     return `
         <div class="color-input-group">
             <input type="color" 
                    class="form-control form-control-color property-input" 
-                   name="${property}"
-                   value="${currentValue}"
-                   style="width: 50px;">
+                   name="${safeProperty}"
+                   value="${safeValue}">
             <input type="text" 
                    class="form-control property-input" 
-                   name="${property}-text"
-                   value="${currentValue}"
-                   placeholder="#000000">
+                   name="${safeProperty}-text"
+                   value="${safeValue}"
+                   placeholder="#000000"
+                   pattern="^#[0-9A-Fa-f]{6}$">
             <div class="color-preview" 
-                 style="background-color: ${currentValue}"></div>
+                 style="background-color: ${safeValue}"></div>
         </div>
     `;
 }
@@ -686,46 +1040,74 @@ function generateColorControl(property, currentValue) {
  * Bind property change handlers
  */
 function bindPropertyHandlers() {
-    $('.property-input').off('input change').on('input change', function() {
-        const property = $(this).attr('name');
-        const value = $(this).val();
-        const category = AppState.currentCategory;
-        
-        // Update state
-        if (property.endsWith('-text')) {
-            const actualProperty = property.replace('-text', '');
-            AppState.properties[category][actualProperty] = value;
+    $('.property-input').off('input.cssEditor change.cssEditor').on('input.cssEditor change.cssEditor', function() {
+        try {
+            const property = $(this).attr('name');
+            const value = $(this).val();
+            const category = AppState.currentCategory;
             
-            // Update color picker
-            $(`input[name="${actualProperty}"][type="color"]`).val(value);
-            $('.color-preview').css('background-color', value);
-        } else {
-            AppState.properties[category][property] = value;
-            
-            // Update range value display
-            if ($(this).attr('type') === 'range') {
-                const unit = PropertyDefinitions[category][property].unit || '';
-                $(`#${property}-value`).text(value + unit);
+            if (!property || !category) {
+                console.warn('Missing property or category');
+                return;
             }
             
-            // Update color text input
-            if ($(this).attr('type') === 'color') {
-                $(`input[name="${property}-text"]`).val(value);
-                $('.color-preview').css('background-color', value);
+            // Validate color inputs
+            if ($(this).attr('type') === 'color' || property.endsWith('-text')) {
+                if (property.endsWith('-text') && value && !isValidColor(value)) {
+                    $(this).addClass('is-invalid');
+                    return;
+                } else {
+                    $(this).removeClass('is-invalid');
+                }
             }
+            
+            // Update state
+            if (property.endsWith('-text')) {
+                const actualProperty = property.replace('-text', '');
+                if (isValidColor(value)) {
+                    AppState.properties[category][actualProperty] = value;
+                    
+                    // Update color picker
+                    $(`input[name="${actualProperty}"][type="color"]`).val(value);
+                    $('.color-preview').css('background-color', value);
+                }
+            } else {
+                AppState.properties[category][property] = value;
+                
+                // Update range value display
+                if ($(this).attr('type') === 'range') {
+                    const unit = PropertyDefinitions[category][property]?.unit || '';
+                    $(`#${property}-value`).text(value + unit);
+                }
+                
+                // Update color text input
+                if ($(this).attr('type') === 'color') {
+                    $(`input[name="${property}-text"]`).val(value);
+                    $('.color-preview').css('background-color', value);
+                }
+            }
+            
+            // Update preview with animation
+            updatePreview();
+            
+            // Add visual feedback
+            $(this).closest('.property-group').addClass('animate-property');
+            setTimeout(() => {
+                $(this).closest('.property-group').removeClass('animate-property');
+            }, 600);
+            
+            // Save to localStorage (debounced)
+            debouncedSave();
+            
+            // Auto-switch to preview on mobile after change
+            if (AppState.isMobile && AppState.activeSection === 'controls') {
+                setTimeout(() => {
+                    showMobileSection('preview');
+                }, 500);
+            }
+        } catch (error) {
+            console.error('Error handling property change:', error);
         }
-        
-        // Update preview with animation
-        updatePreview();
-        
-        // Add visual feedback
-        $(this).closest('.property-group').addClass('animate-property');
-        setTimeout(() => {
-            $(this).closest('.property-group').removeClass('animate-property');
-        }, 600);
-        
-        // Save to localStorage
-        saveToLocalStorage();
     });
 }
 
@@ -733,9 +1115,11 @@ function bindPropertyHandlers() {
  * Initialize color pickers
  */
 function initializeColorPickers() {
-    $('.color-preview').off('click').on('click', function() {
+    $('.color-preview').off('click.cssEditor').on('click.cssEditor', function() {
         const $colorInput = $(this).siblings('input[type="color"]');
-        $colorInput.click();
+        if ($colorInput.length) {
+            $colorInput.click();
+        }
     });
 }
 
@@ -743,45 +1127,56 @@ function initializeColorPickers() {
  * Update the preview area
  */
 function updatePreview() {
-    const category = AppState.currentCategory;
-    const properties = AppState.properties[category];
-    const $container = $('#previewContainer');
-    
-    // Remove existing classes and styles
-    $container.removeClass().addClass('preview-container');
-    $container.find('.preview-item').attr('style', '');
-    
-    // Apply category-specific updates
-    switch (category) {
-        case 'flexbox':
-            updateFlexboxPreview($container, properties);
-            break;
-        case 'grid':
-            updateGridPreview($container, properties);
-            break;
-        case 'boxshadow':
-            updateBoxShadowPreview($container, properties);
-            break;
-        case 'transform':
-            updateTransformPreview($container, properties);
-            break;
-        case 'border':
-            updateBorderPreview($container, properties);
-            break;
-        case 'typography':
-            updateTypographyPreview($container, properties);
-            break;
-        case 'background':
-            updateBackgroundPreview($container, properties);
-            break;
-        case 'layout':
-            updateLayoutPreview($container, properties);
-            break;
+    try {
+        const category = AppState.currentCategory;
+        const properties = AppState.properties[category];
+        const $container = $('#previewContainer');
+        
+        if (!properties || !$container.length) {
+            console.warn('Missing properties or container for preview update');
+            return;
+        }
+        
+        // Remove existing classes and styles
+        $container.removeClass().addClass('preview-container');
+        $container.find('.preview-item').attr('style', '');
+        
+        // Apply category-specific updates
+        switch (category) {
+            case 'flexbox':
+                updateFlexboxPreview($container, properties);
+                break;
+            case 'grid':
+                updateGridPreview($container, properties);
+                break;
+            case 'boxshadow':
+                updateBoxShadowPreview($container, properties);
+                break;
+            case 'transform':
+                updateTransformPreview($container, properties);
+                break;
+            case 'border':
+                updateBorderPreview($container, properties);
+                break;
+            case 'typography':
+                updateTypographyPreview($container, properties);
+                break;
+            case 'background':
+                updateBackgroundPreview($container, properties);
+                break;
+            case 'layout':
+                updateLayoutPreview($container, properties);
+                break;
+            default:
+                console.warn('Unknown category for preview:', category);
+        }
+        
+        // Add animation class
+        $container.addClass('animate-property');
+        setTimeout(() => $container.removeClass('animate-property'), 600);
+    } catch (error) {
+        console.error('Error updating preview:', error);
     }
-    
-    // Add animation class
-    $container.addClass('animate-property');
-    setTimeout(() => $container.removeClass('animate-property'), 600);
 }
 
 /**
@@ -790,11 +1185,11 @@ function updatePreview() {
 function updateFlexboxPreview($container, properties) {
     const styles = {
         'display': 'flex',
-        'justify-content': properties['justify-content'],
-        'align-items': properties['align-items'],
-        'flex-direction': properties['flex-direction'],
-        'flex-wrap': properties['flex-wrap'],
-        'gap': properties['gap'] + 'px'
+        'justify-content': properties['justify-content'] || 'flex-start',
+        'align-items': properties['align-items'] || 'stretch',
+        'flex-direction': properties['flex-direction'] || 'row',
+        'flex-wrap': properties['flex-wrap'] || 'nowrap',
+        'gap': (properties['gap'] || '20') + 'px'
     };
     
     $container.css(styles);
@@ -808,11 +1203,11 @@ function updateGridPreview($container, properties) {
     
     const styles = {
         'display': 'grid',
-        'grid-template-columns': properties['grid-template-columns'],
-        'grid-template-rows': properties['grid-template-rows'],
-        'gap': properties['gap'] + 'px',
-        'justify-items': properties['justify-items'],
-        'align-items': properties['align-items']
+        'grid-template-columns': properties['grid-template-columns'] || 'repeat(3, 1fr)',
+        'grid-template-rows': properties['grid-template-rows'] || 'auto',
+        'gap': (properties['gap'] || '20') + 'px',
+        'justify-items': properties['justify-items'] || 'stretch',
+        'align-items': properties['align-items'] || 'stretch'
     };
     
     $container.css(styles);
@@ -822,7 +1217,14 @@ function updateGridPreview($container, properties) {
  * Update box shadow preview
  */
 function updateBoxShadowPreview($container, properties) {
-    const shadow = `${properties['box-shadow-x']}px ${properties['box-shadow-y']}px ${properties['box-shadow-blur']}px ${properties['box-shadow-spread']}px ${hexToRgba(properties['box-shadow-color'], properties['box-shadow-opacity'])}`;
+    const x = properties['box-shadow-x'] || '0';
+    const y = properties['box-shadow-y'] || '4';
+    const blur = properties['box-shadow-blur'] || '15';
+    const spread = properties['box-shadow-spread'] || '0';
+    const color = properties['box-shadow-color'] || '#000000';
+    const opacity = properties['box-shadow-opacity'] || '0.1';
+    
+    const shadow = `${x}px ${y}px ${blur}px ${spread}px ${hexToRgba(color, opacity)}`;
     
     $container.find('.preview-item').css('box-shadow', shadow);
 }
@@ -831,13 +1233,20 @@ function updateBoxShadowPreview($container, properties) {
  * Update transform preview
  */
 function updateTransformPreview($container, properties) {
+    const rotate = properties['transform-rotate'] || '0';
+    const scale = properties['transform-scale'] || '1';
+    const translateX = properties['transform-translateX'] || '0';
+    const translateY = properties['transform-translateY'] || '0';
+    const skewX = properties['transform-skewX'] || '0';
+    const skewY = properties['transform-skewY'] || '0';
+    
     const transform = `
-        rotate(${properties['transform-rotate']}deg) 
-        scale(${properties['transform-scale']}) 
-        translateX(${properties['transform-translateX']}px) 
-        translateY(${properties['transform-translateY']}px) 
-        skewX(${properties['transform-skewX']}deg) 
-        skewY(${properties['transform-skewY']}deg)
+        rotate(${rotate}deg) 
+        scale(${scale}) 
+        translateX(${translateX}px) 
+        translateY(${translateY}px) 
+        skewX(${skewX}deg) 
+        skewY(${skewY}deg)
     `.replace(/\s+/g, ' ').trim();
     
     $container.find('.preview-item').css('transform', transform);
@@ -848,8 +1257,8 @@ function updateTransformPreview($container, properties) {
  */
 function updateBorderPreview($container, properties) {
     const styles = {
-        'border-radius': properties['border-radius'] + 'px',
-        'border': `${properties['border-width']}px ${properties['border-style']} ${properties['border-color']}`
+        'border-radius': (properties['border-radius'] || '0') + 'px',
+        'border': `${properties['border-width'] || '0'}px ${properties['border-style'] || 'solid'} ${properties['border-color'] || '#000000'}`
     };
     
     $container.find('.preview-item').css(styles);
@@ -865,12 +1274,12 @@ function updateTypographyPreview($container, properties) {
     });
     
     const styles = {
-        'font-size': properties['font-size'] + 'px',
-        'font-weight': properties['font-weight'],
-        'text-align': properties['text-align'],
-        'line-height': properties['line-height'],
-        'letter-spacing': properties['letter-spacing'] + 'px',
-        'text-transform': properties['text-transform']
+        'font-size': (properties['font-size'] || '16') + 'px',
+        'font-weight': properties['font-weight'] || '400',
+        'text-align': properties['text-align'] || 'left',
+        'line-height': properties['line-height'] || '1.5',
+        'letter-spacing': (properties['letter-spacing'] || '0') + 'px',
+        'text-transform': properties['text-transform'] || 'none'
     };
     
     $container.find('.preview-item').css(styles);
@@ -880,10 +1289,10 @@ function updateTypographyPreview($container, properties) {
  * Update background preview
  */
 function updateBackgroundPreview($container, properties) {
-    let background = properties['background-color'];
+    let background = properties['background-color'] || '#ffffff';
     
     if (properties['background-type'] === 'gradient') {
-        background = `linear-gradient(135deg, ${properties['background-color']}, #667eea)`;
+        background = `linear-gradient(135deg, ${background}, #667eea)`;
     }
     
     $container.find('.preview-item').css('background', background);
@@ -894,9 +1303,9 @@ function updateBackgroundPreview($container, properties) {
  */
 function updateLayoutPreview($container, properties) {
     const styles = {
-        'position': properties['position'],
-        'display': properties['display'],
-        'z-index': properties['z-index']
+        'position': properties['position'] || 'static',
+        'display': properties['display'] || 'block',
+        'z-index': properties['z-index'] || '0'
     };
     
     $container.css(styles);
@@ -906,77 +1315,91 @@ function updateLayoutPreview($container, properties) {
  * Toggle dark mode
  */
 function toggleDarkMode() {
-    AppState.darkMode = !AppState.darkMode;
-    
-    if (AppState.darkMode) {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        $('#darkModeToggle i').removeClass('fa-moon').addClass('fa-sun');
-    } else {
-        document.documentElement.removeAttribute('data-theme');
-        $('#darkModeToggle i').removeClass('fa-sun').addClass('fa-moon');
+    try {
+        AppState.darkMode = !AppState.darkMode;
+        applyDarkModeSettings();
+        localStorage.setItem('darkMode', AppState.darkMode.toString());
+        showToast('Theme updated successfully!');
+    } catch (error) {
+        console.error('Error toggling dark mode:', error);
+        showToast('Error updating theme');
     }
-    
-    localStorage.setItem('darkMode', AppState.darkMode.toString());
-    showToast('Theme updated successfully!');
 }
 
 /**
  * Show code generation modal
  */
 function showCodeModal() {
-    const { html, css, bootstrap } = generateCode();
-    
-    // Update modal content
-    $('#htmlCode').text(html);
-    $('#cssCode').text(css);
-    $('#bootstrapCode').text(bootstrap);
-    
-    // Trigger syntax highlighting
-    Prism.highlightAll();
-    
-    // Show modal
-    $('#codeModal').modal('show');
+    try {
+        const { html, css, bootstrap } = generateCode();
+        
+        // Update modal content
+        $('#htmlCode').text(html);
+        $('#cssCode').text(css);
+        $('#bootstrapCode').text(bootstrap);
+        
+        // Show modal
+        $('#codeModal').modal('show');
+    } catch (error) {
+        console.error('Error showing code modal:', error);
+        showToast('Error generating code');
+    }
 }
 
 /**
  * Generate code for current configuration
  */
 function generateCode() {
-    const category = AppState.currentCategory;
-    const properties = AppState.properties[category];
-    
-    let html = '';
-    let css = '';
-    let bootstrap = '';
-    
-    switch (category) {
-        case 'flexbox':
-            ({ html, css, bootstrap } = generateFlexboxCode(properties));
-            break;
-        case 'grid':
-            ({ html, css, bootstrap } = generateGridCode(properties));
-            break;
-        case 'boxshadow':
-            ({ html, css, bootstrap } = generateBoxShadowCode(properties));
-            break;
-        case 'transform':
-            ({ html, css, bootstrap } = generateTransformCode(properties));
-            break;
-        case 'border':
-            ({ html, css, bootstrap } = generateBorderCode(properties));
-            break;
-        case 'typography':
-            ({ html, css, bootstrap } = generateTypographyCode(properties));
-            break;
-        case 'background':
-            ({ html, css, bootstrap } = generateBackgroundCode(properties));
-            break;
-        case 'layout':
-            ({ html, css, bootstrap } = generateLayoutCode(properties));
-            break;
+    try {
+        const category = AppState.currentCategory;
+        const properties = AppState.properties[category];
+        
+        if (!properties) {
+            throw new Error('No properties found for category: ' + category);
+        }
+        
+        let html = '';
+        let css = '';
+        let bootstrap = '';
+        
+        switch (category) {
+            case 'flexbox':
+                ({ html, css, bootstrap } = generateFlexboxCode(properties));
+                break;
+            case 'grid':
+                ({ html, css, bootstrap } = generateGridCode(properties));
+                break;
+            case 'boxshadow':
+                ({ html, css, bootstrap } = generateBoxShadowCode(properties));
+                break;
+            case 'transform':
+                ({ html, css, bootstrap } = generateTransformCode(properties));
+                break;
+            case 'border':
+                ({ html, css, bootstrap } = generateBorderCode(properties));
+                break;
+            case 'typography':
+                ({ html, css, bootstrap } = generateTypographyCode(properties));
+                break;
+            case 'background':
+                ({ html, css, bootstrap } = generateBackgroundCode(properties));
+                break;
+            case 'layout':
+                ({ html, css, bootstrap } = generateLayoutCode(properties));
+                break;
+            default:
+                throw new Error('Unknown category: ' + category);
+        }
+        
+        return { html, css, bootstrap };
+    } catch (error) {
+        console.error('Error generating code:', error);
+        return {
+            html: '<!-- Error generating HTML -->',
+            css: '/* Error generating CSS */',
+            bootstrap: '<!-- Error generating Bootstrap -->'
+        };
     }
-    
-    return { html, css, bootstrap };
 }
 
 /**
@@ -991,11 +1414,11 @@ function generateFlexboxCode(properties) {
     
     const css = `.flex-container {
     display: flex;
-    justify-content: ${properties['justify-content']};
-    align-items: ${properties['align-items']};
-    flex-direction: ${properties['flex-direction']};
-    flex-wrap: ${properties['flex-wrap']};
-    gap: ${properties['gap']}px;
+    justify-content: ${properties['justify-content'] || 'flex-start'};
+    align-items: ${properties['align-items'] || 'stretch'};
+    flex-direction: ${properties['flex-direction'] || 'row'};
+    flex-wrap: ${properties['flex-wrap'] || 'nowrap'};
+    gap: ${properties['gap'] || '20'}px;
 }
 
 .flex-item {
@@ -1040,11 +1463,11 @@ function generateGridCode(properties) {
     
     const css = `.grid-container {
     display: grid;
-    grid-template-columns: ${properties['grid-template-columns']};
-    grid-template-rows: ${properties['grid-template-rows']};
-    gap: ${properties['gap']}px;
-    justify-items: ${properties['justify-items']};
-    align-items: ${properties['align-items']};
+    grid-template-columns: ${properties['grid-template-columns'] || 'repeat(3, 1fr)'};
+    grid-template-rows: ${properties['grid-template-rows'] || 'auto'};
+    gap: ${properties['gap'] || '20'}px;
+    justify-items: ${properties['justify-items'] || 'stretch'};
+    align-items: ${properties['align-items'] || 'stretch'};
 }
 
 .grid-item {
@@ -1070,7 +1493,14 @@ function generateGridCode(properties) {
  * Generate box shadow code
  */
 function generateBoxShadowCode(properties) {
-    const shadow = `${properties['box-shadow-x']}px ${properties['box-shadow-y']}px ${properties['box-shadow-blur']}px ${properties['box-shadow-spread']}px ${hexToRgba(properties['box-shadow-color'], properties['box-shadow-opacity'])}`;
+    const x = properties['box-shadow-x'] || '0';
+    const y = properties['box-shadow-y'] || '4';
+    const blur = properties['box-shadow-blur'] || '15';
+    const spread = properties['box-shadow-spread'] || '0';
+    const color = properties['box-shadow-color'] || '#000000';
+    const opacity = properties['box-shadow-opacity'] || '0.1';
+    
+    const shadow = `${x}px ${y}px ${blur}px ${spread}px ${hexToRgba(color, opacity)}`;
     
     const html = `<div class="shadow-box">
     <p>Box with custom shadow</p>
@@ -1102,7 +1532,14 @@ function generateBoxShadowCode(properties) {
  * Generate transform code
  */
 function generateTransformCode(properties) {
-    const transform = `rotate(${properties['transform-rotate']}deg) scale(${properties['transform-scale']}) translateX(${properties['transform-translateX']}px) translateY(${properties['transform-translateY']}px) skewX(${properties['transform-skewX']}deg) skewY(${properties['transform-skewY']}deg)`;
+    const rotate = properties['transform-rotate'] || '0';
+    const scale = properties['transform-scale'] || '1';
+    const translateX = properties['transform-translateX'] || '0';
+    const translateY = properties['transform-translateY'] || '0';
+    const skewX = properties['transform-skewX'] || '0';
+    const skewY = properties['transform-skewY'] || '0';
+    
+    const transform = `rotate(${rotate}deg) scale(${scale}) translateX(${translateX}px) translateY(${translateY}px) skewX(${skewX}deg) skewY(${skewY}deg)`;
     
     const html = `<div class="transform-box">
     <p>Transformed Element</p>
@@ -1149,8 +1586,8 @@ function generateBorderCode(properties) {
     height: 150px;
     background: white;
     padding: 20px;
-    border-radius: ${properties['border-radius']}px;
-    border: ${properties['border-width']}px ${properties['border-style']} ${properties['border-color']};
+    border-radius: ${properties['border-radius'] || '0'}px;
+    border: ${properties['border-width'] || '0'}px ${properties['border-style'] || 'solid'} ${properties['border-color'] || '#000000'};
 }`;
     
     const bootstrap = `<div class="border-custom p-4 bg-white">
@@ -1159,8 +1596,8 @@ function generateBorderCode(properties) {
 
 <style>
 .border-custom {
-    border-radius: ${properties['border-radius']}px;
-    border: ${properties['border-width']}px ${properties['border-style']} ${properties['border-color']};
+    border-radius: ${properties['border-radius'] || '0'}px;
+    border: ${properties['border-width'] || '0'}px ${properties['border-style'] || 'solid'} ${properties['border-color'] || '#000000'};
 }
 </style>`;
     
@@ -1177,12 +1614,12 @@ function generateTypographyCode(properties) {
 </div>`;
     
     const css = `.typography-demo {
-    font-size: ${properties['font-size']}px;
-    font-weight: ${properties['font-weight']};
-    text-align: ${properties['text-align']};
-    line-height: ${properties['line-height']};
-    letter-spacing: ${properties['letter-spacing']}px;
-    text-transform: ${properties['text-transform']};
+    font-size: ${properties['font-size'] || '16'}px;
+    font-weight: ${properties['font-weight'] || '400'};
+    text-align: ${properties['text-align'] || 'left'};
+    line-height: ${properties['line-height'] || '1.5'};
+    letter-spacing: ${properties['letter-spacing'] || '0'}px;
+    text-transform: ${properties['text-transform'] || 'none'};
 }`;
     
     const bootstrap = `<div class="typography-custom">
@@ -1192,12 +1629,12 @@ function generateTypographyCode(properties) {
 
 <style>
 .typography-custom {
-    font-size: ${properties['font-size']}px;
-    font-weight: ${properties['font-weight']};
-    text-align: ${properties['text-align']};
-    line-height: ${properties['line-height']};
-    letter-spacing: ${properties['letter-spacing']}px;
-    text-transform: ${properties['text-transform']};
+    font-size: ${properties['font-size'] || '16'}px;
+    font-weight: ${properties['font-weight'] || '400'};
+    text-align: ${properties['text-align'] || 'left'};
+    line-height: ${properties['line-height'] || '1.5'};
+    letter-spacing: ${properties['letter-spacing'] || '0'}px;
+    text-transform: ${properties['text-transform'] || 'none'};
 }
 </style>`;
     
@@ -1208,10 +1645,10 @@ function generateTypographyCode(properties) {
  * Generate background code
  */
 function generateBackgroundCode(properties) {
-    let background = properties['background-color'];
+    let background = properties['background-color'] || '#ffffff';
     
     if (properties['background-type'] === 'gradient') {
-        background = `linear-gradient(135deg, ${properties['background-color']}, #667eea)`;
+        background = `linear-gradient(135deg, ${background}, #667eea)`;
     }
     
     const html = `<div class="background-demo">
@@ -1262,9 +1699,9 @@ function generateLayoutCode(properties) {
 }
 
 .layout-item {
-    position: ${properties['position']};
-    display: ${properties['display']};
-    z-index: ${properties['z-index']};
+    position: ${properties['position'] || 'static'};
+    display: ${properties['display'] || 'block'};
+    z-index: ${properties['z-index'] || '0'};
     width: 150px;
     height: 100px;
     background: linear-gradient(135deg, #667eea, #764ba2);
@@ -1283,9 +1720,9 @@ function generateLayoutCode(properties) {
 
 <style>
 .layout-custom {
-    position: ${properties['position']};
-    display: ${properties['display']};
-    z-index: ${properties['z-index']};
+    position: ${properties['position'] || 'static'};
+    display: ${properties['display'] || 'block'};
+    z-index: ${properties['z-index'] || '0'};
     width: 150px;
     height: 100px;
     background: linear-gradient(135deg, #667eea, #764ba2);
@@ -1299,20 +1736,25 @@ function generateLayoutCode(properties) {
  * Reset current category to defaults
  */
 function resetCurrentCategory() {
-    const category = AppState.currentCategory;
-    const defaults = getDefaultProperties(category);
-    
-    // Update state
-    AppState.properties[category] = { ...defaults };
-    
-    // Reload controls
-    loadCategoryControls(category);
-    
-    // Update preview
-    updatePreview();
-    
-    // Show feedback
-    showToast(`${formatCategoryName(category)} properties reset to default!`);
+    try {
+        const category = AppState.currentCategory;
+        const defaults = getDefaultProperties(category);
+        
+        // Update state
+        AppState.properties[category] = { ...defaults };
+        
+        // Reload controls
+        loadCategoryControls(category);
+        
+        // Update preview
+        updatePreview();
+        
+        // Show feedback
+        showToast(`${formatCategoryName(category)} properties reset to default!`);
+    } catch (error) {
+        console.error('Error resetting category:', error);
+        showToast('Error resetting properties');
+    }
 }
 
 /**
@@ -1382,12 +1824,13 @@ function getDefaultProperties(category) {
  * Download generated code as files
  */
 function downloadCode() {
-    const { html, css, bootstrap } = generateCode();
-    const category = AppState.currentCategory;
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-    
-    // Create and download HTML file
-    downloadFile(`${category}-example-${timestamp}.html`, `<!DOCTYPE html>
+    try {
+        const { html, css, bootstrap } = generateCode();
+        const category = AppState.currentCategory;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        
+        // Create and download HTML file
+        downloadFile(`${category}-example-${timestamp}.html`, `<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -1401,42 +1844,87 @@ function downloadCode() {
     ${html}
 </body>
 </html>`);
-    
-    showToast('Code files downloaded successfully!');
+        
+        showToast('Code files downloaded successfully!');
+    } catch (error) {
+        console.error('Error downloading code:', error);
+        showToast('Error downloading files');
+    }
 }
 
 /**
  * Download file helper
  */
 function downloadFile(filename, content) {
-    const element = document.createElement('a');
-    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-    element.setAttribute('download', filename);
-    element.style.display = 'none';
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+    try {
+        const element = document.createElement('a');
+        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+        element.setAttribute('download', filename);
+        element.style.display = 'none';
+        document.body.appendChild(element);
+        element.click();
+        document.body.removeChild(element);
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        showToast('Error downloading file');
+    }
 }
 
 /**
  * Copy code to clipboard
  */
 function copyToClipboard(elementId) {
-    const text = document.getElementById(elementId).textContent;
+    const element = document.getElementById(elementId);
+    if (!element) {
+        showToast('Element not found');
+        return;
+    }
     
-    if (navigator.clipboard) {
+    const text = element.textContent || element.innerText;
+    
+    if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
             showToast('Code copied to clipboard!');
+        }).catch(() => {
+            fallbackCopyTextToClipboard(text);
         });
     } else {
-        // Fallback for older browsers
+        fallbackCopyTextToClipboard(text);
+    }
+}
+
+/**
+ * Fallback copy method for older browsers
+ */
+function fallbackCopyTextToClipboard(text) {
+    try {
         const textArea = document.createElement('textarea');
         textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.width = '2em';
+        textArea.style.height = '2em';
+        textArea.style.padding = '0';
+        textArea.style.border = 'none';
+        textArea.style.outline = 'none';
+        textArea.style.boxShadow = 'none';
+        textArea.style.background = 'transparent';
         document.body.appendChild(textArea);
+        textArea.focus();
         textArea.select();
-        document.execCommand('copy');
+        
+        const successful = document.execCommand('copy');
+        if (successful) {
+            showToast('Code copied to clipboard!');
+        } else {
+            showToast('Failed to copy code');
+        }
+        
         document.body.removeChild(textArea);
-        showToast('Code copied to clipboard!');
+    } catch (error) {
+        console.error('Error copying to clipboard:', error);
+        showToast('Failed to copy code');
     }
 }
 
@@ -1444,88 +1932,216 @@ function copyToClipboard(elementId) {
  * Initialize tooltips
  */
 function initializeTooltips() {
-    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function(tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
-    });
+    try {
+        // Dispose existing tooltips
+        const existingTooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        existingTooltips.forEach(el => {
+            const tooltip = bootstrap.Tooltip.getInstance(el);
+            if (tooltip) {
+                tooltip.dispose();
+            }
+        });
+        
+        // Initialize new tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function(tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl, {
+                trigger: AppState.isMobile ? 'click' : 'hover',
+                placement: 'top',
+                fallbackPlacements: ['bottom', 'left', 'right']
+            });
+        });
+    } catch (error) {
+        console.warn('Error initializing tooltips:', error);
+    }
 }
 
 /**
  * Show welcome animation
  */
 function showWelcomeAnimation() {
-    const $sidebar = $('.sidebar');
-    const $controls = $('.controls-section');
-    const $preview = $('.preview-section');
-    
-    $sidebar.css('transform', 'translateX(-100%)');
-    $controls.css('transform', 'translateY(-100%)');
-    $preview.css('transform', 'translateX(100%)');
-    
-    setTimeout(() => {
-        $sidebar.css('transform', 'translateX(0)');
-    }, 100);
-    
-    setTimeout(() => {
-        $controls.css('transform', 'translateY(0)');
-    }, 200);
-    
-    setTimeout(() => {
-        $preview.css('transform', 'translateX(0)');
-    }, 300);
+    try {
+        if (AppState.isMobile) {
+            // Simple fade-in for mobile
+            $('.main-content').css('opacity', '0');
+            setTimeout(() => {
+                $('.main-content').css('opacity', '1');
+            }, 100);
+        } else {
+            // Original animation for desktop
+            const $sidebar = $('.sidebar-wrapper');
+            const $controls = $('.controls-wrapper');
+            const $preview = $('.preview-wrapper');
+            
+            $sidebar.css('transform', 'translateX(-100%)');
+            $controls.css('transform', 'translateY(-100%)');
+            $preview.css('transform', 'translateX(100%)');
+            
+            setTimeout(() => {
+                $sidebar.css('transform', 'translateX(0)');
+            }, 100);
+            
+            setTimeout(() => {
+                $controls.css('transform', 'translateY(0)');
+            }, 200);
+            
+            setTimeout(() => {
+                $preview.css('transform', 'translateX(0)');
+            }, 300);
+        }
+    } catch (error) {
+        console.warn('Error in welcome animation:', error);
+    }
 }
 
 /**
  * Show toast notification
  */
 function showToast(message) {
-    $('#toastMessage').text(message);
-    const toast = new bootstrap.Toast(document.getElementById('liveToast'));
-    toast.show();
+    try {
+        const $toastMessage = $('#toastMessage');
+        const $toast = $('#liveToast');
+        
+        if ($toastMessage.length && $toast.length) {
+            $toastMessage.text(message);
+            const toast = new bootstrap.Toast($toast[0], {
+                delay: 3000
+            });
+            toast.show();
+        } else {
+            // Fallback to console if toast elements not found
+            console.log('Toast:', message);
+        }
+    } catch (error) {
+        console.error('Error showing toast:', error);
+    }
 }
 
 /**
- * Save current state to localStorage
+ * Save current state to localStorage (debounced)
  */
+const debouncedSave = debounce(saveToLocalStorage, 1000);
+
 function saveToLocalStorage() {
-    localStorage.setItem('cssEditorState', JSON.stringify(AppState.properties));
+    try {
+        const stateToSave = {
+            properties: AppState.properties,
+            currentCategory: AppState.currentCategory,
+            darkMode: AppState.darkMode,
+            activeSection: AppState.activeSection
+        };
+        localStorage.setItem('cssEditorState', JSON.stringify(stateToSave));
+    } catch (e) {
+        console.warn('Failed to save state to localStorage:', e);
+    }
 }
 
 /**
  * Load state from localStorage
  */
 function loadFromLocalStorage() {
-    const saved = localStorage.getItem('cssEditorState');
-    if (saved) {
-        try {
-            AppState.properties = { ...AppState.properties, ...JSON.parse(saved) };
-        } catch (e) {
-            console.error('Failed to load saved state:', e);
+    try {
+        const saved = localStorage.getItem('cssEditorState');
+        if (saved) {
+            const parsedState = JSON.parse(saved);
+            
+            // Merge saved properties with defaults
+            if (parsedState.properties) {
+                Object.keys(parsedState.properties).forEach(category => {
+                    if (AppState.properties[category]) {
+                        AppState.properties[category] = {
+                            ...AppState.properties[category],
+                            ...parsedState.properties[category]
+                        };
+                    }
+                });
+            }
+            
+            // Load other state
+            if (parsedState.currentCategory && PropertyDefinitions[parsedState.currentCategory]) {
+                AppState.currentCategory = parsedState.currentCategory;
+            }
+            
+            if (typeof parsedState.darkMode === 'boolean') {
+                AppState.darkMode = parsedState.darkMode;
+            }
+            
+            if (parsedState.activeSection) {
+                AppState.activeSection = parsedState.activeSection;
+            }
         }
+    } catch (e) {
+        console.warn('Failed to load saved state:', e);
     }
 }
 
 // Utility functions
 
 /**
+ * Debounce function to limit rapid function calls
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+/**
  * Convert hex color to rgba with opacity
  */
 function hexToRgba(hex, opacity) {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    try {
+        if (!hex || typeof hex !== 'string') {
+            return 'rgba(0, 0, 0, 0.1)';
+        }
+        
+        // Remove # if present
+        hex = hex.replace('#', '');
+        
+        // Convert 3-digit hex to 6-digit
+        if (hex.length === 3) {
+            hex = hex.split('').map(char => char + char).join('');
+        }
+        
+        if (hex.length !== 6) {
+            return 'rgba(0, 0, 0, 0.1)';
+        }
+        
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        const a = Math.max(0, Math.min(1, parseFloat(opacity) || 0.1));
+        
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    } catch (error) {
+        console.warn('Error converting hex to rgba:', error);
+        return 'rgba(0, 0, 0, 0.1)';
+    }
 }
 
 /**
- * Format option labels
+ * Format option labels for display
  */
 function formatOptionLabel(option) {
-    return option.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+    if (typeof option !== 'string') {
+        return String(option);
+    }
+    
+    return option
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, l => l.toUpperCase())
+        .replace(/\s+/g, ' ')
+        .trim();
 }
 
 /**
- * Format category names
+ * Format category names for display
  */
 function formatCategoryName(category) {
     const names = {
@@ -1538,7 +2154,7 @@ function formatCategoryName(category) {
         'background': 'Background',
         'layout': 'Layout'
     };
-    return names[category] || category;
+    return names[category] || category.charAt(0).toUpperCase() + category.slice(1);
 }
 
 /**
@@ -1583,11 +2199,122 @@ function getBootstrapDirectionClass(value) {
     return map[value] || '';
 }
 
+/**
+ * Validate color format
+ */
+function isValidColor(color) {
+    if (!color || typeof color !== 'string') {
+        return false;
+    }
+    
+    // Check hex format
+    const hexPattern = /^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/;
+    if (hexPattern.test(color)) {
+        return true;
+    }
+    
+    // Check rgb/rgba format
+    const rgbPattern = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(,\s*(0|1|0?\.\d+))?\s*\)$/;
+    if (rgbPattern.test(color)) {
+        return true;
+    }
+    
+    // Check named colors (basic set)
+    const namedColors = ['red', 'green', 'blue', 'white', 'black', 'yellow', 'orange', 'purple', 'pink', 'gray', 'grey'];
+    if (namedColors.includes(color.toLowerCase())) {
+        return true;
+    }
+    
+    return false;
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+    if (typeof text !== 'string') {
+        return '';
+    }
+    
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Performance monitoring (optional - for development)
+ */
+if (typeof window !== 'undefined' && window.performance) {
+    const performanceObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+            if (entry.duration > 16) { // More than one frame at 60fps
+                console.warn(`Slow operation detected: ${entry.name} took ${entry.duration}ms`);
+            }
+        }
+    });
+    
+    try {
+        performanceObserver.observe({ entryTypes: ['measure'] });
+    } catch (e) {
+        // Performance observer not supported
+    }
+}
+
 // Initialize app when DOM is ready
 $(document).ready(function() {
-    // Load saved state
-    loadFromLocalStorage();
+    // Add performance mark
+    if (window.performance && window.performance.mark) {
+        performance.mark('app-init-start');
+    }
     
-    // Initialize the application
-    initializeApp();
+    try {
+        // Load saved state first
+        loadFromLocalStorage();
+        
+        // Initialize the application
+        initializeApp();
+        
+        // Performance mark
+        if (window.performance && window.performance.mark && window.performance.measure) {
+            performance.mark('app-init-end');
+            performance.measure('app-initialization', 'app-init-start', 'app-init-end');
+        }
+    } catch (error) {
+        console.error('Fatal error during initialization:', error);
+        
+        // Show fallback error message
+        $('body').html(`
+            <div class="container-fluid d-flex align-items-center justify-content-center min-vh-100">
+                <div class="alert alert-danger text-center">
+                    <h4><i class="fas fa-exclamation-triangle me-2"></i>Application Error</h4>
+                    <p>Failed to initialize the CSS Visual Editor. Please refresh the page and try again.</p>
+                    <button class="btn btn-danger" onclick="location.reload()">
+                        <i class="fas fa-refresh me-1"></i>Refresh Page
+                    </button>
+                </div>
+            </div>
+        `);
+    }
+});
+
+// Global error handler
+window.addEventListener('error', function(event) {
+    console.error('Global error:', event.error);
+    
+    // Don't show toast for every error, but log them
+    if (typeof showToast === 'function') {
+        showToast('An error occurred. Check console for details.');
+    }
+});
+
+// Unhandled promise rejection handler
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+    event.preventDefault();
 });

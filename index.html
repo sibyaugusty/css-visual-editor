@@ -15,114 +15,153 @@
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
-    <!-- Header -->
+    <!-- Mobile Header -->
     <header class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-        <div class="container-fluid">
+        <div class="container-fluid mobile-header--wrapper">
+            <!-- Mobile Menu Toggle -->
+            <button class="navbar-toggler d-lg-none me-2" type="button" id="mobileMenuToggle">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
             <a class="navbar-brand fw-bold" href="#">
                 <i class="fas fa-code me-2"></i>
-                CSS Visual Editor Pro
+                <span class="brand-text">CSS Visual Editor Pro</span>
             </a>
-            <div class="navbar-nav ms-auto">
-                <button class="btn btn-outline-light me-2" id="darkModeToggle">
+            
+            <div class="navbar-nav ms-auto d-flex flex-row">
+                <button class="btn btn-outline-light me-2 btn-sm" id="darkModeToggle">
                     <i class="fas fa-moon"></i>
                 </button>
-                <button class="btn btn-success" id="showCodeBtn">
+                <button class="btn btn-success btn-sm" id="showCodeBtn">
                     <i class="fas fa-code me-1"></i>
-                    Show Code
+                    <span class="d-none d-sm-inline">Show Code</span>
                 </button>
             </div>
         </div>
     </header>
 
+    <!-- Mobile Tab Navigation -->
+    <nav class="mobile-tabs d-lg-none">
+        <div class="container-fluid">
+            <div class="mobile-tab-buttons">
+                <button class="mobile-tab-btn active" data-tab="categories">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Categories</span>
+                </button>
+                <button class="mobile-tab-btn" data-tab="controls">
+                    <i class="fas fa-sliders-h"></i>
+                    <span>Controls</span>
+                </button>
+                <button class="mobile-tab-btn" data-tab="preview">
+                    <i class="fas fa-eye"></i>
+                    <span>Preview</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
     <!-- Main Content -->
     <div class="container-fluid p-0 main-content">
         <div class="row g-0 h-100">
-            <!-- Left Sidebar -->
-            <div class="col-md-2 sidebar">
-                <div class="sidebar-header">
-                    <h5 class="text-center py-3 mb-0">
-                        <i class="fas fa-layer-group me-2"></i>
-                        Categories
-                    </h5>
-                </div>
-                <ul class="category-list list-unstyled">
-                    <li class="category-item active" data-category="flexbox">
-                        <i class="fab fa-css3-alt me-2"></i>
-                        Flexbox
-                    </li>
-                    <li class="category-item" data-category="grid">
-                        <i class="fas fa-th me-2"></i>
-                        Grid
-                    </li>
-                    <li class="category-item" data-category="boxshadow">
-                        <i class="fas fa-square me-2"></i>
-                        Box Shadow
-                    </li>
-                    <li class="category-item" data-category="transform">
-                        <i class="fas fa-sync-alt me-2"></i>
-                        Transform
-                    </li>
-                    <li class="category-item" data-category="border">
-                        <i class="far fa-square me-2"></i>
-                        Border
-                    </li>
-                    <li class="category-item" data-category="typography">
-                        <i class="fas fa-font me-2"></i>
-                        Typography
-                    </li>
-                    <li class="category-item" data-category="background">
-                        <i class="fas fa-palette me-2"></i>
-                        Background
-                    </li>
-                    <li class="category-item" data-category="layout">
-                        <i class="fas fa-columns me-2"></i>
-                        Layout
-                    </li>
-                </ul>
-            </div>
-
-            <!-- Center Controls -->
-            <div class="col-md-4 controls-section">
-                <div class="controls-header">
-                    <h5 class="py-3 mb-0 text-center">
-                        <i class="fas fa-sliders-h me-2"></i>
-                        <span id="currentCategory">Flexbox</span> Properties
-                    </h5>
-                </div>
-                <div class="controls-content p-3">
-                    <div id="propertyControls">
-                        <!-- Dynamic content will be loaded here -->
+            <!-- Sidebar/Categories -->
+            <div class="col-12 col-lg-2 sidebar-wrapper">
+                <div class="sidebar" id="sidebar">
+                    <div class="sidebar-header">
+                        <h5 class="text-center py-3 mb-0">
+                            <i class="fas fa-layer-group me-2"></i>
+                            Categories
+                        </h5>
                     </div>
-                    <button class="btn btn-outline-secondary w-100 mt-3" id="resetBtn">
-                        <i class="fas fa-undo me-1"></i>
-                        Reset to Default
-                    </button>
+                    <div class="sidebar-content">
+                        <ul class="category-list list-unstyled">
+                            <li class="category-item active" data-category="flexbox">
+                                <i class="fab fa-css3-alt me-2"></i>
+                                <span>Flexbox</span>
+                            </li>
+                            <li class="category-item" data-category="grid">
+                                <i class="fas fa-th me-2"></i>
+                                <span>Grid</span>
+                            </li>
+                            <li class="category-item" data-category="boxshadow">
+                                <i class="fas fa-square me-2"></i>
+                                <span>Box Shadow</span>
+                            </li>
+                            <li class="category-item" data-category="transform">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                <span>Transform</span>
+                            </li>
+                            <li class="category-item" data-category="border">
+                                <i class="far fa-square me-2"></i>
+                                <span>Border</span>
+                            </li>
+                            <li class="category-item" data-category="typography">
+                                <i class="fas fa-font me-2"></i>
+                                <span>Typography</span>
+                            </li>
+                            <li class="category-item" data-category="background">
+                                <i class="fas fa-palette me-2"></i>
+                                <span>Background</span>
+                            </li>
+                            <li class="category-item" data-category="layout">
+                                <i class="fas fa-columns me-2"></i>
+                                <span>Layout</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
-            <!-- Right Preview -->
-            <div class="col-md-6 preview-section">
-                <div class="preview-header">
-                    <h5 class="py-3 mb-0 text-center">
-                        <i class="fas fa-eye me-2"></i>
-                        Live Preview
-                    </h5>
+            <!-- Controls Section -->
+            <div class="col-12 col-lg-4 controls-wrapper">
+                <div class="controls-section" id="controlsSection">
+                    <div class="controls-header">
+                        <h5 class="py-3 mb-0 text-center">
+                            <i class="fas fa-sliders-h me-2"></i>
+                            <span id="currentCategory">Flexbox</span> Properties
+                        </h5>
+                    </div>
+                    <div class="controls-content">
+                        <div class="controls-inner p-3">
+                            <div id="propertyControls">
+                                <!-- Dynamic content will be loaded here -->
+                            </div>
+                            <button class="btn btn-outline-secondary w-100 mt-3 btn-lg" id="resetBtn">
+                                <i class="fas fa-undo me-1"></i>
+                                Reset to Default
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="preview-content">
-                    <div class="preview-container" id="previewContainer">
-                        <!-- Dynamic preview content -->
-                        <div class="preview-item"></div>
-                        <div class="preview-item"></div>
-                        <div class="preview-item"></div>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="col-12 col-lg-6 preview-wrapper">
+                <div class="preview-section" id="previewSection">
+                    <div class="preview-header">
+                        <h5 class="py-3 mb-0 text-center">
+                            <i class="fas fa-eye me-2"></i>
+                            Live Preview
+                        </h5>
+                    </div>
+                    <div class="preview-content">
+                        <div class="preview-container" id="previewContainer">
+                            <!-- Dynamic preview content -->
+                            <div class="preview-item"></div>
+                            <div class="preview-item"></div>
+                            <div class="preview-item"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Mobile Overlay -->
+    <div class="mobile-overlay d-lg-none" id="mobileOverlay"></div>
+
     <!-- Code Export Modal -->
     <div class="modal fade" id="codeModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
+        <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">
@@ -132,7 +171,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <ul class="nav nav-tabs" id="codeTab" role="tablist">
+                    <ul class="nav nav-tabs nav-fill" id="codeTab" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="html-tab" data-bs-toggle="tab" data-bs-target="#html" type="button">
                                 <i class="fab fa-html5 me-1"></i>HTML
@@ -151,7 +190,7 @@
                     </ul>
                     <div class="tab-content" id="codeTabContent">
                         <div class="tab-pane fade show active" id="html" role="tabpanel">
-                            <div class="code-actions mb-2">
+                            <div class="code-actions mb-2 d-flex flex-wrap gap-2">
                                 <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('htmlCode')">
                                     <i class="fas fa-copy me-1"></i>Copy HTML
                                 </button>
@@ -159,7 +198,7 @@
                             <pre><code id="htmlCode" class="language-html"></code></pre>
                         </div>
                         <div class="tab-pane fade" id="css" role="tabpanel">
-                            <div class="code-actions mb-2">
+                            <div class="code-actions mb-2 d-flex flex-wrap gap-2">
                                 <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('cssCode')">
                                     <i class="fas fa-copy me-1"></i>Copy CSS
                                 </button>
@@ -167,7 +206,7 @@
                             <pre><code id="cssCode" class="language-css"></code></pre>
                         </div>
                         <div class="tab-pane fade" id="bootstrap" role="tabpanel">
-                            <div class="code-actions mb-2">
+                            <div class="code-actions mb-2 d-flex flex-wrap gap-2">
                                 <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('bootstrapCode')">
                                     <i class="fas fa-copy me-1"></i>Copy Bootstrap
                                 </button>
@@ -176,7 +215,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer flex-wrap">
                     <button class="btn btn-success" id="downloadCodeBtn">
                         <i class="fas fa-download me-1"></i>
                         Download All
